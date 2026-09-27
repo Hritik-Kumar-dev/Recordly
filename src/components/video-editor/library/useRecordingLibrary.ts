@@ -241,6 +241,31 @@ export function useRecordingLibrary(
 			setCancelling(false);
 		}
 	};
+
+	/** Pick videos from anywhere on disk and append them to the current timeline. */
+	const importVideos = async (index?: number) => {
+		if (lock.current) return;
+		// addToTimeline bails silently without a source, so check before opening the
+		// picker rather than leaving the user wondering why nothing happened.
+		if (!current.current.project.videoSourcePath) {
+			toast.error("Open or record a video first", {
+				description: "Imported videos are appended to the current recording.",
+			});
+			return;
+		}
+		const result = await window.electronAPI.pickVideosToImport();
+		if (!result.success) {
+			if (result.canceled) return;
+			toast.error(
+				`Could not import video: ${result.message ?? result.error ?? "unknown error"}`,
+			);
+			return;
+		}
+		const paths = result.paths ?? [];
+		if (paths.length === 0) return;
+		await addToTimeline(paths, index);
+	};
+
 	return {
 		open,
 		setOpen,
@@ -258,5 +283,6 @@ export function useRecordingLibrary(
 		cancelling,
 		cancelImport,
 		addToTimeline,
+		importVideos,
 	};
 }

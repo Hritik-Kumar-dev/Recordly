@@ -395,3 +395,54 @@ test("cancelling a batch keeps completed clips and stops the remaining import", 
 	await expect(page.getByText("Adding video…")).toHaveCount(0);
 	await expect(page.locator('[data-variant="clip"]')).toHaveCount(2);
 });
+
+test("Import picks videos from anywhere and appends them to the timeline in order", async ({
+	page,
+}) => {
+	await setup(page);
+	await page.evaluate(() => {
+		let count = 0;
+		window.electronAPI.pickVideosToImport = async () => ({
+			success: true,
+			paths: ["/downloads/one.mp4", "/downloads/two.mp4"],
+		});
+		window.electronAPI.importRecording = async (current, path) => {
+			count++;
+			document.documentElement.dataset.importOrder =
+				(document.documentElement.dataset.importOrder || "") + path + ";";
+			document.documentElement.dataset.importSource = current;
+			return {
+				success: true,
+				value: {
+					path: `/sequence-${count}.mp4`,
+					url: `${location.origin}/tests/ui/fixtures/filmstrip.mp4`,
+					sourceStartMs: 6000 + (count - 1) * 1000,
+					durationMs: 1000,
+					totalDurationMs: 6000 + count * 1000,
+				},
+			};
+		};
+	});
+	// The panel is already open after setup; clicking "Clips" would toggle it shut.
+	const panel = page.getByRole("complementary", { name: "Clips" });
+	await expect(panel.getByRole("img", { name: "Preview of first.mp4" })).toBeVisible();
+	await panel.getByLabel("Import video from your computer").click();
+	await expect(page.locator('[data-variant="clip"]')).toHaveCount(3);
+	await expect(page.locator("html")).toHaveAttribute(
+		"data-import-order",
+		"/downloads/one.mp4;/downloads/two.mp4;",
+	);
+	await expect(page.locator("html")).toHaveAttribute("data-import-source", "/sequence-1.mp4");
+});
+
+test("Import stays silent when the picker is cancelled", async ({ page }) => {
+	await setup(page);
+	await page.evaluate(() => {
+		window.electronAPI.pickVideosToImport = async () => ({ success: false, canceled: true });
+	});
+	const panel = page.getByRole("complementary", { name: "Clips" });
+	await expect(panel.getByRole("img", { name: "Preview of first.mp4" })).toBeVisible();
+	await panel.getByLabel("Import video from your computer").click();
+	await expect(page.locator('[data-variant="clip"]')).toHaveCount(1);
+	await expect(page.getByText("Could not import video")).toHaveCount(0);
+});

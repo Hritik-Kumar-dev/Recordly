@@ -75,6 +75,18 @@ export function RecordingLibraryPanel({
 		>
 			<header className="flex min-h-14 shrink-0 items-center gap-2 px-5 py-3">
 				<h2 className="flex-1 text-[14px] font-semibold">Clips</h2>
+				<Button
+					variant="ghost"
+					size="sm"
+					className="h-7 gap-1.5 px-2 text-xs"
+					aria-label="Import video from your computer"
+					title="Import video from your computer"
+					disabled={library.busy || library.importing}
+					onClick={() => void library.importVideos()}
+				>
+					<Plus className="size-4" />
+					Import
+				</Button>
 				<Dropdown>
 					<HeroButton
 						isIconOnly
@@ -193,7 +205,9 @@ export function RecordingLibraryPanel({
 							{query ? "No matching videos" : "Your recordings appear here"}
 						</p>
 						<p className="text-xs">
-							{query ? "Try another search." : "Record a video to get started."}
+							{query
+								? "Try another search."
+								: "Record a video, or use Import to add one from your computer."}
 						</p>
 					</div>
 				)}

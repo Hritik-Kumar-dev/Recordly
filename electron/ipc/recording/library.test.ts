@@ -48,6 +48,7 @@ vi.mock("../ffmpeg/binary", async () => {
 });
 import { listRecordings, setRecordingsRemoved, clearRecordingTrashUndo } from "./library";
 import { importRecording, discardRecordingImport } from "./importRecording";
+import { rememberApprovedLocalReadPath } from "../project/manager";
 import { getRecordingThumbnail } from "./thumbnail";
 import { getCompanionAudioFallbackInfo } from "./diagnostics";
 const require = createRequire(import.meta.url);
@@ -260,6 +261,62 @@ it("imports different-sized recordings with playable video, separate audio, stab
 	);
 }, 60000);
 
+it("appends a video from outside the recordings folder, leaving the original untouched", async () => {
+	const outsideRoot = await fs.realpath(
+		await fs.mkdtemp(path.join(os.tmpdir(), "recordly-external-")),
+	);
+	try {
+		const base = path.join(state.root, "recording-base.mp4");
+		// Stands in for a file the user picked from Downloads or a USB drive.
+		const external = path.join(outsideRoot, "downloaded-clip.mp4");
+		await run(ffmpeg, [
+			"-v",
+			"error",
+			"-f",
+			"lavfi",
+			"-i",
+			"color=c=green:s=160x90:r=30:d=1",
+			"-c:v",
+			"libx264",
+			"-pix_fmt",
+			"yuv420p",
+			base,
+		]);
+		await run(ffmpeg, [
+			"-v",
+			"error",
+			"-f",
+			"lavfi",
+			"-i",
+			"color=c=yellow:s=320x180:r=30:d=1",
+			"-c:v",
+			"libx264",
+			"-pix_fmt",
+			"yuv420p",
+			external,
+		]);
+		await listRecordings();
+		// The picker approves each pick before import, which is the only thing that
+		// makes an out-of-library path readable here.
+		await rememberApprovedLocalReadPath(external);
+		const original = await fs.readFile(external);
+
+		const result = await importRecording(base, external);
+
+		expect(result.sourceStartMs).toBeCloseTo(1000, -1);
+		expect(result.durationMs).toBeCloseTo(1000, -1);
+		expect(result.totalDurationMs).toBeCloseTo(2000, -1);
+		await run(ffmpeg, ["-v", "error", "-i", result.path, "-f", "null", "-"]);
+		// The picked file is read in place, never moved or rewritten.
+		expect(await fs.readFile(external)).toEqual(original);
+		await expect(fs.access(external)).resolves.toBeUndefined();
+		// And it must not leak into the recordings library.
+		expect((await listRecordings()).map((entry) => entry.path)).not.toContain(external);
+	} finally {
+		await fs.rm(outsideRoot, { recursive: true, force: true });
+	}
+}, 60000);
+
 it("retains staged originals for undo when the OS refuses Trash", async () => {
 	const { shell } = await import("electron");
 	const file = path.join(state.root, "recording-failure.mp4");
@@ -298,6 +355,7 @@ it("cancels an active import and removes partial outputs without changing origin
 	]);
 	await fs.copyFile(base, added);
 	state.approved.add(base);
+	await rememberApprovedLocalReadPath(added);
 	const original = await fs.readFile(base);
 	const controller = new AbortController();
 	const importing = importRecording(base, added, undefined, controller.signal);

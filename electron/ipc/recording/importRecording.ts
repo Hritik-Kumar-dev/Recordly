@@ -12,7 +12,6 @@ import { rememberApprovedLocalReadPath, resolveApprovedLocalMediaPath } from "..
 import { getRecordingsDir, getTelemetryPathForVideo } from "../utils";
 import { getUsableCompanionAudioCandidates } from "./diagnostics";
 import { normalizeCursorTelemetrySamples, writeCursorTelemetry } from "../cursor/telemetry";
-import { listRecordings } from "./library";
 import type {
 	RecordingImportResult,
 	RecordingWebcamSource,
@@ -112,8 +111,12 @@ export async function importRecording(
 	currentWebcam?: RecordingWebcamSource,
 	signal?: AbortSignal,
 ): Promise<RecordingImportResult> {
-	const entry = (await listRecordings()).find((entry) => entry.path === recordingPath);
-	if (!entry) throw new Error("Recording is no longer in Videos");
+	// Accept any user-approved local video rather than only files already in the library,
+	// so a video picked from anywhere on disk can be appended to the timeline. Read
+	// approval is granted by the file picker, and the media-server ACL still decides
+	// which paths the renderer may read back.
+	const appended = await resolveApprovedLocalMediaPath(recordingPath);
+	if (!appended) throw new Error("The selected video is no longer available");
 	const current = await resolveApprovedLocalMediaPath(currentPath);
 	if (!current) throw new Error("Current video is no longer available");
 	const server = getMediaServerBaseUrl();
@@ -137,7 +140,7 @@ export async function importRecording(
 		// Only our own normalized source format may be copied across appends.
 		const copyVideo = isLibrarySequenceSource(current);
 		await normalize(current, normalizedBase, format, copyVideo, signal);
-		await normalize(entry.path, normalizedNew, format, false, signal);
+		await normalize(appended, normalizedNew, format, false, signal);
 		const baseMeta = await probe(normalizedBase, signal);
 		const newMeta = await probe(normalizedNew, signal);
 		await fs.writeFile(path.join(work, "list.txt"), "file 'base.mkv'\nfile 'new.mkv'\n");
@@ -194,7 +197,7 @@ export async function importRecording(
 		const samples = [];
 		for (const [file, offset, meta] of [
 			[current, 0, base],
-			[entry.path, sourceStartMs, await probe(entry.path, signal)],
+			[appended, sourceStartMs, await probe(appended, signal)],
 		] as const) {
 			let points: ReturnType<typeof normalizeCursorTelemetrySamples> = [];
 			try {
@@ -222,7 +225,7 @@ export async function importRecording(
 		await writeCursorTelemetry(output, samples);
 		const webcam = await composeSequenceWebcam(
 			current,
-			entry.path,
+			appended,
 			output,
 			work,
 			sourceStartMs,

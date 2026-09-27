@@ -79,6 +79,39 @@ export function registerCaptionHandlers() {
 		}
 	});
 
+	ipcMain.handle("pick-videos-to-import", async () => {
+		try {
+			const result = await dialog.showOpenDialog({
+				title: "Import Videos",
+				defaultPath: await getRecordingsDir(),
+				filters: [
+					{ name: "Video Files", extensions: VIDEO_FILE_EXTENSIONS },
+					{ name: "All Files", extensions: ["*"] },
+				],
+				properties: ["openFile", "multiSelections"],
+			});
+
+			if (result.canceled || result.filePaths.length === 0) {
+				return { success: false, canceled: true };
+			}
+
+			// Approve each pick so the main process may read it. Unlike
+			// open-video-file-picker this deliberately leaves the current project
+			// alone, because importing appends to the timeline instead of replacing it.
+			for (const filePath of result.filePaths) {
+				approveUserPath(filePath);
+			}
+			return { success: true, paths: result.filePaths };
+		} catch (error) {
+			console.error("Failed to pick videos to import:", error);
+			return {
+				success: false,
+				message: "Failed to open file picker",
+				error: String(error),
+			};
+		}
+	});
+
 	ipcMain.handle("open-audio-file-picker", async () => {
 		try {
 			const result = await dialog.showOpenDialog({

@@ -3,6 +3,7 @@ import {
 	CaretUpIcon,
 	House,
 	DotsThreeVerticalIcon,
+	FolderOpenIcon,
 	MicrophoneIcon,
 	MicrophoneSlashIcon,
 	MinusIcon,
@@ -80,8 +81,13 @@ function LaunchWindowContent() {
 	const hudContentRef = useRef<HTMLDivElement>(null);
 	const hudBarRef = useRef<HTMLDivElement>(null);
 
-	const { selectedSource, hasSelectedSource, handleSourceSelect, syncSelectedSource } =
-		useLaunchWindowActions();
+	const {
+		selectedSource,
+		hasSelectedSource,
+		handleSourceSelect,
+		syncSelectedSource,
+		openVideoFile,
+	} = useLaunchWindowActions();
 
 	const showWebcamControls = webcamEnabled && !recording;
 	const { devices, selectedDeviceId, setSelectedDeviceId } = useMicrophoneDevices(
@@ -378,6 +384,21 @@ function LaunchWindowContent() {
 			<Separator orientation="vertical" className="mx-[5px] h-6 self-center" />
 
 			{homeButton}
+
+			<Button
+				variant="ghost"
+				size="icon"
+				iconSize="lg"
+				className={styles.electronNoDrag}
+				aria-label={t("recording.openVideoFile")}
+				title={t("recording.openVideoFile")}
+				onClick={() => {
+					beginInteractiveHudAction();
+					void openVideoFile();
+				}}
+			>
+				<FolderOpenIcon className="size-5" />
+			</Button>
 
 			<Button
 				variant="ghost"

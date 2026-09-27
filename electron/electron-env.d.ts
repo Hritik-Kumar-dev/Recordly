@@ -683,6 +683,13 @@ interface Window {
 			canceled?: boolean;
 			error?: string;
 		}>;
+		pickVideosToImport: () => Promise<{
+			success: boolean;
+			paths?: string[];
+			message?: string;
+			canceled?: boolean;
+			error?: string;
+		}>;
 		openAudioFilePicker: () => Promise<{ success: boolean; path?: string; canceled?: boolean }>;
 		openWhisperExecutablePicker: () => Promise<{
 			success: boolean;
